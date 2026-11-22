@@ -1,7 +1,10 @@
 {
   "upstream_repo": "zed-industries/zed",
-  "upstream_commit": "b840e80bf27119c9985631ffa0c9c48e415a94c6",
+  "upstream_commit": "f126950f9d3b62666f97437ae5d4ccac2272c4db",
   "files": {
     "crates/zed/src/zed/app_menus.rs": "app_menus.he.json"
-  }
+  },
+  "ui_global": [
+    "ui.he.json"
+  ]
 }

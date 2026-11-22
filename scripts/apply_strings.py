@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Apply Hebrew translations to a checkout of the Zed source tree.
 
-Reads a manifest that maps Rust source files (relative to --root) to JSON files
-of {"English text": "Hebrew text"}. Only whole string literals that equal a key
-exactly are replaced, so code, identifiers and partial strings are never touched.
+Two modes, both driven by translations/manifest.json:
 
-The run fails if a translation key is not found in its file (the upstream text
-changed) so that stale translations are noticed instead of silently skipped.
+* "files": {"path.rs": "map.json"}  - whole string literals equal to a key are
+  replaced anywhere in that one file (used for the main menu).
+* "ui_global": ["ui.he.json", ...]  - a global English->Hebrew dictionary applied
+  to every non-test crates/**/*.rs file, but ONLY where the literal is the visible
+  text of a UI call (Label::new("..."), Tooltip::text("..."), .entry("...") ...).
+  Identifiers, comparisons, log messages and settings keys are never touched.
+
+Every key of a global dictionary must be found at least once, otherwise the run
+fails (the upstream text changed and the translation is stale). Use --lenient to
+only warn.
 """
 import argparse
 import json
@@ -16,11 +22,37 @@ import sys
 
 LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
+S = r'"((?:[^"\\]|\\.)+)"'
+UI_PATTERNS = [re.compile(p) for p in [
+    r'Label::new\(\s*' + S + r'\s*\)',
+    r'LabelLike::new\(\s*' + S,
+    r'Tooltip::text\(\s*' + S,
+    r'Tooltip::simple\(\s*' + S,
+    r'Tooltip::for_action\(\s*' + S,
+    r'Tooltip::for_action_title\(\s*' + S,
+    r'Tooltip::for_action_title_in\(\s*' + S,
+    r'\.(?:entry|action|toggleable_entry|custom_entry|link|header|label|submenu)\(\s*' + S,
+    r'\.(?:tooltip_text|title|description|placeholder|set_placeholder_text|label_text|tooltip)\(\s*' + S,
+    r'Button::new\(\s*"[^"]*"\s*,\s*' + S,
+    r'ToggleButtonSimple::new\(\s*' + S,
+    r'(?:title|description|label|header|placeholder|summary|name):\s*' + S + r'\.into\(\)',
+    r'(?:title|description|label|header):\s*' + S,
+]]
 
-def apply_file(path, mapping):
+
+def is_test_path(path):
+    p = path.replace("\\", "/")
+    return ("/tests/" in p or "/benches/" in p or "/examples/" in p
+            or p.endswith(("_tests.rs", "_test.rs")) or "/test/" in p)
+
+
+def check_safe(mapping, name):
     for key, value in mapping.items():
         if '"' in value or "\\" in value or "\n" in value:
-            sys.exit(f"unsafe characters in translation of {key!r}")
+            sys.exit(f"unsafe characters in translation of {key!r} ({name})")
+
+
+def apply_literal_file(path, mapping):
     with open(path, encoding="utf-8") as f:
         src = f.read()
     hits = {}
@@ -38,6 +70,31 @@ def apply_file(path, mapping):
     return hits
 
 
+def apply_ui_file(path, mapping, hits):
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    spans = []
+    for pat in UI_PATTERNS:
+        for m in pat.finditer(src):
+            text = m.group(1)
+            if text in mapping:
+                spans.append((m.start(1), m.end(1), text))
+    if not spans:
+        return
+    spans.sort()
+    out, last = [], 0
+    for start, end, text in spans:
+        if start < last:  # overlapping match from another pattern
+            continue
+        out.append(src[last:start])
+        out.append(mapping[text])
+        last = end
+        hits[text] = hits.get(text, 0) + 1
+    out.append(src[last:])
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write("".join(out))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, help="path to the Zed checkout")
@@ -50,15 +107,33 @@ def main():
         manifest = json.load(f)
 
     failed = False
-    for rel_path, map_name in manifest["files"].items():
+    for rel_path, map_name in manifest.get("files", {}).items():
         with open(os.path.join(manifest_dir, map_name), encoding="utf-8") as f:
             mapping = json.load(f)
-        hits = apply_file(os.path.join(args.root, rel_path), mapping)
+        check_safe(mapping, map_name)
+        hits = apply_literal_file(os.path.join(args.root, rel_path), mapping)
         unused = [k for k in mapping if k not in hits]
         print(f"{rel_path}: replaced {sum(hits.values())} literals ({len(hits)} distinct)")
         if unused:
             print(f"  unused keys: {unused}")
             failed = failed or not args.lenient
+
+    for map_name in manifest.get("ui_global", []):
+        with open(os.path.join(manifest_dir, map_name), encoding="utf-8") as f:
+            mapping = json.load(f)
+        check_safe(mapping, map_name)
+        hits = {}
+        for d, _, files in os.walk(os.path.join(args.root, "crates")):
+            for name in files:
+                path = os.path.join(d, name)
+                if name.endswith(".rs") and not is_test_path(path):
+                    apply_ui_file(path, mapping, hits)
+        unused = [k for k in mapping if k not in hits]
+        print(f"{map_name}: replaced {sum(hits.values())} UI strings ({len(hits)}/{len(mapping)} keys used)")
+        if unused:
+            print(f"  unused keys ({len(unused)}): {unused[:40]}")
+            failed = failed or not args.lenient
+
     sys.exit(1 if failed else 0)
 
 
