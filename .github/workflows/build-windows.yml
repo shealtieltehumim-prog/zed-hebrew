@@ -63,6 +63,41 @@ jobs:
         working-directory: zed
         run: cargo build --profile release-fast --package zed
 
+      - name: Smoke test (launch Zed and take screenshots)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe = "$env:CARGO_TARGET_DIR\release-fast\zed.exe"
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          Set-Content smoke\demo.asm "section .text`nglobal _start`n_start:`n    mov rdx,8`n    cmp rdx,4`n    jg looks"
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+            $bmp.Save("smoke\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          $p = Start-Process $exe -ArgumentList "--user-data-dir", "$PWD\smoke\data", "$PWD\smoke\demo.asm" -PassThru -RedirectStandardError smoke\stderr.txt
+          Start-Sleep 45
+          "exited_after_45s=$($p.HasExited)" | Out-File smoke\status.txt
+          Shot "1-start"
+          [System.Windows.Forms.SendKeys]::SendWait("^+p"); Start-Sleep 6; Shot "2-command-palette"
+          [System.Windows.Forms.SendKeys]::SendWait("{ESC}"); Start-Sleep 2
+          [System.Windows.Forms.SendKeys]::SendWait("^,"); Start-Sleep 10; Shot "3-settings"
+          [System.Windows.Forms.SendKeys]::SendWait("^+e"); Start-Sleep 5; Shot "4-project-panel"
+          "exited_at_end=$($p.HasExited)" | Out-File smoke\status.txt -Append
+          if (-not $p.HasExited) { Stop-Process $p -Force }
+
+      - name: Upload smoke test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: smoke/
+          if-no-files-found: ignore
+
       - name: Package
         shell: pwsh
         run: |
