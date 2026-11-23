@@ -1,0 +1,31 @@
+name: Runner info
+
+# Prints what the temporary GitHub machine is: image name and version, who owns it, which programs
+# are installed and where the desktop shortcuts come from.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  info:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Describe the machine
+        shell: pwsh
+        run: |
+          "ImageOS=$env:ImageOS"
+          "ImageVersion=$env:ImageVersion"
+          "RUNNER_ENVIRONMENT=$env:RUNNER_ENVIRONMENT"
+          "RUNNER_NAME=$env:RUNNER_NAME"
+          "RUNNER_OS=$env:RUNNER_OS"
+          "COMPUTERNAME=$env:COMPUTERNAME"
+          "USERNAME=$env:USERNAME"
+          "--- image notes"
+          if (Test-Path C:\imagedata.json) { Get-Content C:\imagedata.json }
+          "--- desktop shortcuts"
+          Get-ChildItem "C:\Users\Public\Desktop", "$env:USERPROFILE\Desktop" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+          "--- installed programs (sample)"
+          Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match "Epic|Unity|Firefox|Chrome|Edge|^R |R for" } | Select-Object DisplayName, DisplayVersion | Format-Table -AutoSize | Out-String -Width 200
