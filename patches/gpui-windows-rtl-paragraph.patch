@@ -1,0 +1,43 @@
+--- a/crates/gpui_windows/src/direct_write.rs
++++ b/crates/gpui_windows/src/direct_write.rs
+@@ -516,10 +516,25 @@
+                     format.SetFontFallback(fallbacks)?;
+                 }
+ 
++                // A left-to-right paragraph puts trailing punctuation of a Hebrew line on the
++                // wrong side, so lines that start with an RTL letter get an RTL paragraph. The
++                // width is finite because an RTL layout is anchored at its right edge; glyph
++                // positions come from the accumulated advances, not from that anchor.
++                let starts_right_to_left = text.chars().next().is_some_and(is_right_to_left_letter);
++                if starts_right_to_left {
++                    format.SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT)?;
++                    format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
++                }
++                let layout_width = if starts_right_to_left {
++                    100_000.0
++                } else {
++                    f32::INFINITY
++                };
++
+                 let layout = components.factory.CreateTextLayout(
+                     text_wide,
+                     &format,
+-                    f32::INFINITY,
++                    layout_width,
+                     f32::INFINITY,
+                 )?;
+                 let current_text = &text[utf8_offset..(utf8_offset + first_run.len)];
+@@ -1285,6 +1300,13 @@
+     }
+ }
+ 
++fn is_right_to_left_letter(character: char) -> bool {
++    matches!(
++        character,
++        '\u{0590}'..='\u{08FF}' | '\u{FB1D}'..='\u{FDFF}' | '\u{FE70}'..='\u{FEFF}'
++    )
++}
++
+ #[allow(non_snake_case)]
+ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
+     fn DrawGlyphRun(
