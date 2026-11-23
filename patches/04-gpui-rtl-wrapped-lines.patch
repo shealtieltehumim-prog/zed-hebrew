@@ -1,0 +1,76 @@
+--- a/crates/gpui/src/text_system/line.rs
++++ b/crates/gpui/src/text_system/line.rs
+@@ -568,6 +568,16 @@ fn paint_line(
+         let mut prev_glyph_position = Point::default();
+         let mut max_glyph_size = size(px(0.), px(0.));
+         let mut first_glyph_x = origin.x;
++        // Right-to-left text is shaped with glyph positions that decrease along the logical
++        // order, so a wrapped visual line is a logical slice whose glyphs sit anywhere in the
++        // full line. For such a slice every glyph is placed relative to the slice's leftmost
++        // glyph. Left-to-right slices are left on the original path.
++        let rtl_slice_left_edges = if matches!(align, TextAlign::Left) {
++            rtl_slice_left_edges(layout, wrap_boundaries)
++        } else {
++            Vec::new()
++        };
++        let mut flat_glyph_ix = 0usize;
+         for (run_ix, run) in layout.runs.iter().enumerate() {
+             max_glyph_size = text_system.bounding_box(run.font_id, layout.font_size).size;
+ 
+@@ -629,6 +639,10 @@ fn paint_line(
+                     glyph_origin.y += line_height;
+                 }
+                 prev_glyph_position = glyph.position;
++                if let Some(Some(left_edge)) = rtl_slice_left_edges.get(flat_glyph_ix) {
++                    glyph_origin.x = origin.x + glyph.position.x - *left_edge;
++                }
++                flat_glyph_ix += 1;
+ 
+                 let mut finished_underline: Option<(Point<Pixels>, UnderlineStyle, Range<usize>)> =
+                     None;
+@@ -937,6 +951,45 @@ fn paint_line_background(
+     })
+ }
+ 
++/// For every glyph (in logical order) of a wrapped line, the x position of the leftmost glyph of
++/// its visual line, or `None` when that visual line already runs left to right.
++fn rtl_slice_left_edges(
++    layout: &LineLayout,
++    wrap_boundaries: &[WrapBoundary],
++) -> Vec<Option<Pixels>> {
++    let mut positions = Vec::new();
++    let mut slice_starts = Vec::new();
++    let mut wraps = wrap_boundaries.iter().peekable();
++    for (run_ix, run) in layout.runs.iter().enumerate() {
++        for (glyph_ix, glyph) in run.glyphs.iter().enumerate() {
++            if wraps.peek() == Some(&&WrapBoundary { run_ix, glyph_ix }) {
++                wraps.next();
++                slice_starts.push(positions.len());
++            }
++            positions.push(glyph.position.x);
++        }
++    }
++    let mut result = vec![None; positions.len()];
++    let mut start = 0;
++    for end in slice_starts
++        .into_iter()
++        .chain(std::iter::once(positions.len()))
++    {
++        if let Some(slice) = positions.get(start..end)
++            && let Some(first) = slice.first()
++        {
++            let left_edge = slice.iter().copied().fold(*first, |a, b| a.min(b));
++            if left_edge != *first {
++                for entry in &mut result[start..end] {
++                    *entry = Some(left_edge);
++                }
++            }
++        }
++        start = end;
++    }
++    result
++}
++
+ fn aligned_origin_x(
+     origin: Point<Pixels>,
+     align_width: Pixels,
