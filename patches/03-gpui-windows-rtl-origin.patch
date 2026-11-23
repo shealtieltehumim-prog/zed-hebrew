@@ -1,0 +1,100 @@
+--- a/crates/gpui_windows/src/direct_write.rs
++++ b/crates/gpui_windows/src/direct_write.rs
+@@ -494,6 +494,7 @@
+             self.layout_line_scratch.extend(text.encode_utf16());
+             let text_wide = &*self.layout_line_scratch;
+ 
++            let starts_right_to_left = text.chars().next().is_some_and(is_right_to_left_letter);
+             let mut utf8_offset = 0usize;
+             let mut utf16_offset = 0u32;
+             let text_layout = {
+@@ -520,7 +521,6 @@
+                 // wrong side, so lines that start with an RTL letter get an RTL paragraph. The
+                 // width is finite because an RTL layout is anchored at its right edge; glyph
+                 // positions come from the accumulated advances, not from that anchor.
+-                let starts_right_to_left = text.chars().next().is_some_and(is_right_to_left_letter);
+                 if starts_right_to_left {
+                     format.SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT)?;
+                     format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
+@@ -595,6 +595,9 @@
+                 runs: &mut runs,
+                 layout: &text_layout,
+                 width: 0.0,
++                position_runs_by_origin: starts_right_to_left,
++                leftmost_edge: f32::INFINITY,
++                rightmost_edge: f32::NEG_INFINITY,
+             };
+             text_layout.Draw(
+                 Some((&raw mut renderer_context).cast::<c_void>().cast_const()),
+@@ -602,7 +605,20 @@
+                 0.0,
+                 0.0,
+             )?;
+-            let width = px(renderer_context.width);
++            let width = if starts_right_to_left
++                && renderer_context.leftmost_edge <= renderer_context.rightmost_edge
++            {
++                let leftmost_edge = renderer_context.leftmost_edge;
++                let rightmost_edge = renderer_context.rightmost_edge;
++                for run in renderer_context.runs.iter_mut() {
++                    for glyph in run.glyphs.iter_mut() {
++                        glyph.position.x = glyph.position.x - px(leftmost_edge);
++                    }
++                }
++                px(rightmost_edge - leftmost_edge)
++            } else {
++                px(renderer_context.width)
++            };
+ 
+             Ok(LineLayout {
+                 font_size,
+@@ -1207,6 +1223,11 @@
+     runs: &'b mut Vec<ShapedRun>,
+     layout: &'b IDWriteTextLayout,
+     width: f32,
++    // RTL paragraphs are anchored at their right edge, and DirectWrite does not promise a
++    // callback order, so those runs are placed by the origin DirectWrite reports for them.
++    position_runs_by_origin: bool,
++    leftmost_edge: f32,
++    rightmost_edge: f32,
+ }
+ 
+ #[derive(Debug)]
+@@ -1312,7 +1333,7 @@
+     fn DrawGlyphRun(
+         &self,
+         clientdrawingcontext: *const ::core::ffi::c_void,
+-        _baselineoriginx: f32,
++        baselineoriginx: f32,
+         _baselineoriginy: f32,
+         _measuringmode: DWRITE_MEASURING_MODE,
+         glyphrun: *const DWRITE_GLYPH_RUN,
+@@ -1449,8 +1470,16 @@
+             // DirectWrite hands right-to-left runs over in logical order and expects glyphs
+             // to advance leftwards from the run's right edge, so the run has to be mirrored.
+             let is_right_to_left = glyphrun.bidiLevel % 2 == 1;
+-            let run_start = context.width;
+             let run_advance: f32 = glyph_advances.iter().sum();
++            let run_start = if context.position_runs_by_origin {
++                if is_right_to_left {
++                    baselineoriginx - run_advance
++                } else {
++                    baselineoriginx
++                }
++            } else {
++                context.width
++            };
+             let mut advance_before_glyph = 0.0;
+             for (cluster_utf16_len, cluster_glyph_count) in cluster_analyzer {
+                 context.index_converter.advance_to_utf16_ix(utf16_idx);
+@@ -1483,6 +1512,10 @@
+                 glyph_idx += cluster_glyph_count;
+             }
+             context.width = run_start + run_advance;
++            if context.position_runs_by_origin {
++                context.leftmost_edge = context.leftmost_edge.min(run_start);
++                context.rightmost_edge = context.rightmost_edge.max(run_start + run_advance);
++            }
+             context.runs.push(ShapedRun { font_id, glyphs });
+         }
+         Ok(())
