@@ -142,6 +142,8 @@ jobs:
 
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          # Hebrew-only installer: Inno Setup's Hebrew texts plus our translation of Zed's extra strings
+          & "$PWD\hebrew\scripts\hebrew-installer.ps1" -Inno $inno -Iscc $iscc -Translations "$PWD\hebrew\translations\installer"
           $zedRoot = (Resolve-Path zed).Path
           New-Item -ItemType Directory -Force installer | Out-Null
           $outDir = (Resolve-Path installer).Path

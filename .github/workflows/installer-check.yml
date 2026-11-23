@@ -1,0 +1,110 @@
+name: Check Hebrew installer
+
+# A few-minute check of the installer alone: builds it from the upstream script with placeholder
+# files, runs it and takes a screenshot of the first wizard page.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout translations
+        uses: actions/checkout@v4
+        with:
+          path: hebrew
+
+      - name: Checkout the installer files of upstream Zed
+        uses: actions/checkout@v4
+        with:
+          repository: zed-industries/zed
+          ref: f126950f9d3b62666f97437ae5d4ccac2272c4db
+          path: zed
+          sparse-checkout: |
+            crates/zed/resources/windows
+            script/terms
+
+      - name: Build the Hebrew installer from placeholder files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inno = "$PWD\inno"
+          Copy-Item "zed\crates\zed\resources\windows" $inno -Recurse
+          foreach ($dir in "bin", "tools", "x64", "arm64") { New-Item -ItemType Directory -Force "$inno\$dir" | Out-Null }
+          foreach ($file in "Zed.exe", "bin\Zed.exe", "bin\zed", "tools\auto_update_helper.exe", "conpty.dll", "x64\OpenConsole.exe", "arm64\OpenConsole.exe", "amd_ags_x64.dll") {
+            Set-Content "$inno\$file" "placeholder"
+          }
+          $iss = Get-Content "$inno\zed.iss" | Where-Object { $_ -notmatch 'appx\\\*' -and $_ -notmatch 'Remove-AppxPackage -Package ""' }
+          Set-Content "$inno\zed.iss" $iss
+
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          Get-ChildItem (Join-Path (Split-Path $iscc) "Languages") | Select-Object -ExpandProperty Name | Out-String | Write-Host
+
+          & "$PWD\hebrew\scripts\hebrew-installer.ps1" -Inno $inno -Iscc $iscc -Translations "$PWD\hebrew\translations\installer"
+          Select-String -Path "$inno\messages\Hebrew.isl" -Pattern "LanguageName|RightToLeft|LanguageID|LanguageCodePage" | ForEach-Object { $_.Line } | Write-Host
+          Select-String -Path "$inno\zed.iss" -Pattern "^\[Languages\]|^Name: ""hebrew""|ShowLanguageDialog" | ForEach-Object { $_.Line } | Write-Host
+
+          $zedRoot = (Resolve-Path zed).Path
+          New-Item -ItemType Directory -Force installer | Out-Null
+          $outDir = (Resolve-Path installer).Path
+          & $iscc "$inno\zed.iss" `
+            "/dAppId={{B6E7C1A4-5D3F-4F7A-9C2E-7A1D4E8F2B90}" `
+            "/dAppIconName=app-icon-dev" `
+            "/dOutputDir=$outDir" `
+            "/dAppSetupName=Zed-Hebrew-Setup-check" `
+            "/dAppName=Zed Hebrew" `
+            "/dAppDisplayName=Zed Hebrew" `
+            "/dRegValueName=ZedHebrew" `
+            "/dAppMutex=Zed-Dev-Instance-Mutex" `
+            "/dAppExeName=Zed" `
+            "/dResourcesDir=$inno" `
+            "/dShellNameShort=Z&ed Hebrew" `
+            "/dAppUserId=ZedIndustries.Zed.Dev" `
+            "/dVersion=0.0.1" `
+            "/dSourceDir=$zedRoot" `
+            "/dAppxFullName=ZedIndustries.Zed.Dev_1.0.0.0_neutral__japxn1gcva8rg"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
+          Get-Item "installer\Zed-Hebrew-Setup-check.exe" | Select-Object Name, Length | Out-String | Write-Host
+
+      - name: Run it and take screenshots
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          New-Item -ItemType Directory -Force shots | Out-Null
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($bounds.Left, $bounds.Top, 0, 0, $bitmap.Size)
+            $bitmap.Save("$PWD\shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
+          }
+          $setup = Start-Process "$PWD\installer\Zed-Hebrew-Setup-check.exe" -PassThru
+          Start-Sleep 8
+          Shot "01-first-page"
+          [System.Windows.Forms.SendKeys]::SendWait("%a")
+          Start-Sleep 2
+          [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Start-Sleep 3
+          Shot "02-second-page"
+          [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Start-Sleep 3
+          Shot "03-third-page"
+          Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue
+          Get-Process | Where-Object { $_.ProcessName -like "Zed-Hebrew-Setup*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload the screenshots and the test installer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-check
+          path: |
+            shots/
+            installer/Zed-Hebrew-Setup-check.exe
+          if-no-files-found: ignore
