@@ -67,7 +67,12 @@ jobs:
         run: |
           foreach ($patch in Get-ChildItem hebrew/patches -Filter *.patch | Sort-Object Name) {
             Write-Host "Applying $($patch.Name)"
-            git -C zed apply --whitespace=nowarn $patch.FullName
+            # Windows checkouts may turn the patch (or the sources) into CRLF: normalise the patch
+            # and ignore line-ending differences so it applies either way.
+            $text = [System.IO.File]::ReadAllText($patch.FullName) -replace "`r`n", "`n"
+            $normalized = Join-Path $env:RUNNER_TEMP $patch.Name
+            [System.IO.File]::WriteAllText($normalized, $text, (New-Object System.Text.UTF8Encoding($false)))
+            git -C zed apply --ignore-whitespace --whitespace=nowarn $normalized
             if ($LASTEXITCODE -ne 0) { throw "Patch $($patch.Name) does not apply to this Zed commit" }
           }
 

@@ -83,9 +83,21 @@ def check_safe(mapping, name):
             sys.exit(f"unsafe characters in translation of {key!r} ({name})")
 
 
+def read_source(path):
+    """Read a source file as LF text and remember whether it used CRLF (Windows checkouts)."""
+    with open(path, encoding="utf-8", newline="") as f:
+        raw = f.read()
+    return raw.replace("\r\n", "\n"), "\r\n" in raw
+
+
+def write_source(path, text, crlf):
+    """Write the file back with the line endings it had, so later `git apply` patches still match."""
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(text.replace("\n", "\r\n") if crlf else text)
+
+
 def apply_literal_file(path, mapping):
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
+    src, crlf = read_source(path)
     hits = {}
 
     def sub(match):
@@ -96,15 +108,13 @@ def apply_literal_file(path, mapping):
         return match.group(0)
 
     out = LITERAL.sub(sub, src)
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        f.write(out)
+    write_source(path, out, crlf)
     return hits
 
 
 def apply_exact_literals(path, mapping):
     """Replace every exact `"key"` token (robust against char literals/raw strings in the file)."""
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
+    src, crlf = read_source(path)
     hits = {}
     for key, value in mapping.items():
         token = '"' + key + '"'
@@ -112,14 +122,12 @@ def apply_exact_literals(path, mapping):
         if count:
             src = src.replace(token, '"' + finish(value) + '"')
             hits[key] = count
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        f.write(src)
+    write_source(path, src, crlf)
     return hits
 
 
 def apply_ui_file(path, mapping, hits):
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
+    src, crlf = read_source(path)
     spans = []
     for pat in UI_PATTERNS:
         for m in pat.finditer(src):
@@ -140,8 +148,7 @@ def apply_ui_file(path, mapping, hits):
         last = end
         hits[text] = hits.get(text, 0) + 1
     out.append(src[last:])
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        f.write("".join(out))
+    write_source(path, "".join(out), crlf)
 
 
 def main():
