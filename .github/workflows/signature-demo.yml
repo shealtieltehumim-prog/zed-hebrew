@@ -1,0 +1,86 @@
+name: Signature demo (test certificate)
+
+# Signs the released installer with a throw-away TEST certificate named like a Certum open source
+# certificate and takes real Windows screenshots of the security warning and the signature details.
+# The certificate is self-made and trusted only on this temporary runner; it proves nothing to anyone.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag holding the installer"
+        default: "build-18"
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Download the installer and make two copies
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force C:\demo, shots | Out-Null
+          gh release download "${{ github.event.inputs.tag }}" -R "${{ github.repository }}" -p "Zed-Hebrew-Setup-x86_64.exe" -D C:\demo
+          Copy-Item C:\demo\Zed-Hebrew-Setup-x86_64.exe C:\demo\unsigned.exe
+          Move-Item C:\demo\Zed-Hebrew-Setup-x86_64.exe C:\demo\signed.exe
+          Get-ChildItem C:\demo | Select-Object Name, Length | Out-String | Write-Host
+
+      - name: Sign one copy with a test certificate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN="Open Source Developer, Shealtiel", O=Open Source Developer' -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(1)
+          $cer = "C:\demo\test.cer"
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
+          Set-AuthenticodeSignature -FilePath C:\demo\signed.exe -Certificate $cert -HashAlgorithm SHA256 | Format-List Status, StatusMessage, SignerCertificate | Out-String | Write-Host
+          # Mark both files as downloaded from the internet, like a browser download would
+          foreach ($f in "signed.exe", "unsigned.exe") {
+            Set-Content -Path "C:\demo\$f" -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($bounds.Left, $bounds.Top, 0, 0, $bitmap.Size)
+            $bitmap.Save("$PWD\shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
+          }
+          # The security warning Windows shows for a downloaded file
+          foreach ($f in "unsigned", "signed") {
+            Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "Start-Process 'C:\demo\$f.exe'"
+            Start-Sleep 8
+            Shot "warning-$f"
+            [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+            Start-Sleep 2
+            Get-Process | Where-Object { $_.ProcessName -like "signed*" -or $_.ProcessName -like "unsigned*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+          # File properties, tab by tab, to find the Digital Signatures tab
+          $shell = New-Object -ComObject Shell.Application
+          $shell.NameSpace("C:\demo").ParseName("signed.exe").InvokeVerb("properties")
+          Start-Sleep 4
+          Shot "props-0-general"
+          for ($i = 1; $i -le 5; $i++) {
+            [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+            Start-Sleep 2
+            Shot "props-$i"
+          }
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signature-demo
+          path: shots/
+          if-no-files-found: ignore
