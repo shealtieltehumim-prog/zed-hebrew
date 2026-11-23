@@ -33,7 +33,7 @@ jobs:
       CARGO_PROFILE_RELEASE_FAST_DEBUG: "0"
       # Compiled into the editor: its own build number and the server it updates from
       ZED_HEBREW_BUILD: ${{ github.run_number }}
-      ZED_HEBREW_UPDATE_SERVER: ${{ vars.ZED_HEBREW_UPDATE_SERVER || 'https://zed-updates.shealtiel.link' }}
+      ZED_HEBREW_UPDATE_SERVER: ${{ vars.ZED_HEBREW_UPDATE_SERVER || 'https://zed-updates.shealtiel.link,https://updates-production-a2e2f7ae.up.railway.app' }}
     steps:
       - name: Checkout translations
         uses: actions/checkout@v4

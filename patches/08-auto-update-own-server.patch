@@ -1,13 +1,14 @@
 --- a/crates/auto_update/src/auto_update.rs
 +++ b/crates/auto_update/src/auto_update.rs
-@@ -109,6 +109,22 @@
+@@ -109,6 +109,23 @@
      ]
  );
  
-+/// Where the Hebrew build asks for updates. Override at build time with `ZED_HEBREW_UPDATE_SERVER`.
-+const HEBREW_UPDATE_SERVER: &str = match option_env!("ZED_HEBREW_UPDATE_SERVER") {
-+    Some(server) => server,
-+    None => "https://zed-updates.shealtiel.link",
++/// Where the Hebrew build asks for updates: comma-separated servers, tried in order.
++/// Override at build time with `ZED_HEBREW_UPDATE_SERVER`.
++const HEBREW_UPDATE_SERVERS: &str = match option_env!("ZED_HEBREW_UPDATE_SERVER") {
++    Some(servers) => servers,
++    None => "https://zed-updates.shealtiel.link,https://updates-production-a2e2f7ae.up.railway.app",
 +};
 +
 +/// Build number of this binary (set by CI as `ZED_HEBREW_BUILD`). The update server reports the
@@ -23,7 +24,7 @@
  #[derive(Serialize, Debug)]
  pub struct AssetQuery<'a> {
      asset: &'a str,
-@@ -705,17 +721,24 @@
+@@ -705,17 +722,37 @@
          let http_client = client.http_client();
  
          let path = format!("/releases/{}/{}/asset", release_channel.dev_name(), version,);
@@ -39,8 +40,21 @@
 -            },
 -        )?;
 +        let url = if release_channel == ReleaseChannel::Dev {
-+            // The Hebrew build talks only to its own update server and sends no telemetry ids.
-+            format!("{HEBREW_UPDATE_SERVER}{path}?os={os}&arch={arch}&asset={asset}")
++            // The Hebrew build talks only to its own update servers and sends no telemetry ids.
++            // The first server that answers its health check is used.
++            let mut reachable_server = None;
++            for candidate in HEBREW_UPDATE_SERVERS.split(',') {
++                if let Ok(health) = http_client
++                    .get(&format!("{candidate}/health"), Default::default(), true)
++                    .await
++                    && health.status().is_success()
++                {
++                    reachable_server = Some(candidate);
++                    break;
++                }
++            }
++            let server = reachable_server.context("no update server is reachable")?;
++            format!("{server}{path}?os={os}&arch={arch}&asset={asset}")
 +        } else {
 +            http_client
 +                .build_zed_cloud_url_with_query(
@@ -59,7 +73,7 @@
  
          let mut response = http_client
              .get(url.as_str(), Default::default(), true)
-@@ -887,6 +910,15 @@
+@@ -887,6 +924,15 @@
                  };
                  Ok(should_download.then_some(fetched_version))
              }
