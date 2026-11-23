@@ -7,6 +7,11 @@ on:
         description: "Upstream Zed commit SHA (empty = the one pinned in translations/manifest.json)"
         required: false
         default: ""
+      bidi_wrap:
+        description: "Wrap Hebrew strings in RLE..PDF (right-to-left paragraph behaviour)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -41,7 +46,20 @@ jobs:
           "ZED_SHA=$(git -C zed rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Apply Hebrew translations
-        run: python hebrew/scripts/apply_strings.py --root zed --manifest hebrew/translations/manifest.json
+        shell: pwsh
+        run: |
+          $extra = @()
+          if ("${{ github.event.inputs.bidi_wrap }}" -eq "true") { $extra += "--bidi-wrap" }
+          python hebrew/scripts/apply_strings.py --root zed --manifest hebrew/translations/manifest.json @extra
+
+      - name: Apply code patches
+        shell: pwsh
+        run: |
+          foreach ($patch in Get-ChildItem hebrew/patches -Filter *.patch | Sort-Object Name) {
+            Write-Host "Applying $($patch.Name)"
+            git -C zed apply --whitespace=nowarn $patch.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Patch $($patch.Name) does not apply to this Zed commit" }
+          }
 
       - name: Make sure the Spectre-mitigated MSVC libraries are installed
         shell: pwsh
@@ -83,6 +101,7 @@ jobs:
           Start-Sleep 45
           "exited_after_45s=$($p.HasExited)" | Out-File smoke\status.txt
           Shot "1-start"
+          [System.Windows.Forms.SendKeys]::SendWait("{ENTER}"); Start-Sleep 4; Shot "1b-after-trust"
           [System.Windows.Forms.SendKeys]::SendWait("^+p"); Start-Sleep 6; Shot "2-command-palette"
           [System.Windows.Forms.SendKeys]::SendWait("{ESC}"); Start-Sleep 2
           [System.Windows.Forms.SendKeys]::SendWait("^,"); Start-Sleep 10; Shot "3-settings"
@@ -94,7 +113,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-screenshots
+          name: smoke-screenshots-bidi-${{ github.event.inputs.bidi_wrap }}
           path: smoke/
           if-no-files-found: ignore
 
@@ -120,6 +139,6 @@ jobs:
           $tag = "build-${{ github.run_number }}"
           gh release create $tag zed-hebrew-windows-x64.zip zed-hebrew-windows-x64.zip.sha256 `
             --repo "${{ github.repository }}" `
-            --title "Hebrew Zed experimental build ${{ github.run_number }}" `
+            --title "Hebrew Zed experimental build ${{ github.run_number }} (bidi_wrap=${{ github.event.inputs.bidi_wrap }})" `
             --notes "Experimental. Upstream Zed commit: $env:ZED_SHA" `
             --prerelease

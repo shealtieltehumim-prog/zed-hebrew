@@ -22,6 +22,19 @@ import sys
 
 LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
+HEBREW = re.compile("[\u0590-\u05ff]")
+# Written as Rust escapes: rustc rejects raw bidi control characters inside string literals.
+RIGHT_TO_LEFT_EMBEDDING = "\\u{202b}"
+POP_DIRECTIONAL_FORMATTING = "\\u{202c}"
+BIDI_WRAP = False
+
+
+def finish(value):
+    """Optionally wrap a Hebrew value so it lays out as a right-to-left paragraph."""
+    if BIDI_WRAP and HEBREW.search(value):
+        return RIGHT_TO_LEFT_EMBEDDING + value + POP_DIRECTIONAL_FORMATTING
+    return value
+
 S = r'"((?:[^"\\]|\\.)+)"'
 UI_PATTERNS = [re.compile(p) for p in [
     r'Label::new\(\s*' + S + r'\s*\)',
@@ -61,7 +74,7 @@ def apply_literal_file(path, mapping):
         text = match.group(1)
         if text in mapping:
             hits[text] = hits.get(text, 0) + 1
-            return '"' + mapping[text] + '"'
+            return '"' + finish(mapping[text]) + '"'
         return match.group(0)
 
     out = LITERAL.sub(sub, src)
@@ -87,7 +100,7 @@ def apply_ui_file(path, mapping, hits):
         if start < last:  # overlapping match from another pattern
             continue
         out.append(src[last:start])
-        out.append(mapping[text])
+        out.append(finish(mapping[text]))
         last = end
         hits[text] = hits.get(text, 0) + 1
     out.append(src[last:])
@@ -100,7 +113,11 @@ def main():
     parser.add_argument("--root", required=True, help="path to the Zed checkout")
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--lenient", action="store_true", help="do not fail on unused keys")
+    parser.add_argument("--bidi-wrap", action="store_true",
+                        help="wrap every Hebrew string in RLE..PDF so neutrals and embedded English order correctly")
     args = parser.parse_args()
+    global BIDI_WRAP
+    BIDI_WRAP = args.bidi_wrap
 
     manifest_dir = os.path.dirname(os.path.abspath(args.manifest))
     with open(args.manifest, encoding="utf-8") as f:

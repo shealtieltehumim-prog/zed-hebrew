@@ -1,0 +1,46 @@
+--- a/crates/gpui_windows/src/direct_write.rs
++++ b/crates/gpui_windows/src/direct_write.rs
+@@ -1424,6 +1424,12 @@
+             let mut utf16_idx = desc.textPosition as usize;
+             let mut glyph_idx = 0;
+             let mut glyphs = Vec::with_capacity(glyph_count);
++            // DirectWrite hands right-to-left runs over in logical order and expects glyphs
++            // to advance leftwards from the run's right edge, so the run has to be mirrored.
++            let is_right_to_left = glyphrun.bidiLevel % 2 == 1;
++            let run_start = context.width;
++            let run_advance: f32 = glyph_advances.iter().sum();
++            let mut advance_before_glyph = 0.0;
+             for (cluster_utf16_len, cluster_glyph_count) in cluster_analyzer {
+                 context.index_converter.advance_to_utf16_ix(utf16_idx);
+                 utf16_idx += cluster_utf16_len;
+@@ -1436,19 +1442,25 @@
+                     let is_emoji =
+                         color_font && is_color_glyph(font_face, id, &context.components.factory);
+                     let this_glyph_idx = glyph_idx + cluster_glyph_idx;
++                    let glyph_advance = glyph_advances[this_glyph_idx];
++                    let advance_offset = glyph_offsets[this_glyph_idx].advanceOffset;
++                    let glyph_x = if is_right_to_left {
++                        run_start + run_advance - advance_before_glyph - glyph_advance
++                            - advance_offset
++                    } else {
++                        run_start + advance_before_glyph + advance_offset
++                    };
+                     glyphs.push(ShapedGlyph {
+                         id,
+-                        position: point(
+-                            px(context.width + glyph_offsets[this_glyph_idx].advanceOffset),
+-                            px(-glyph_offsets[this_glyph_idx].ascenderOffset),
+-                        ),
++                        position: point(px(glyph_x), px(-glyph_offsets[this_glyph_idx].ascenderOffset)),
+                         index: context.index_converter.utf8_ix,
+                         is_emoji,
+                     });
+-                    context.width += glyph_advances[this_glyph_idx];
++                    advance_before_glyph += glyph_advance;
+                 }
+                 glyph_idx += cluster_glyph_count;
+             }
++            context.width = run_start + run_advance;
+             context.runs.push(ShapedRun { font_id, glyphs });
+         }
+         Ok(())
