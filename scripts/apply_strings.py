@@ -54,6 +54,14 @@ UI_PATTERNS = [re.compile(p) for p in [
 ]]
 
 
+# `.header(...)` is also the HTTP request builder; these are protocol names, never UI text.
+HTTP_HEADER_NAMES = {"Authorization", "Accept", "Location", "Content-Type", "User-Agent", "Cookie"}
+
+
+def is_http_header(match):
+    return ".header(" in match.group(0)[: match.start(1) - match.start()] and match.group(1) in HTTP_HEADER_NAMES
+
+
 def is_test_path(path):
     p = path.replace("\\", "/")
     return ("/tests/" in p or "/benches/" in p or "/examples/" in p
@@ -92,6 +100,8 @@ def apply_ui_file(path, mapping, hits):
     for pat in UI_PATTERNS:
         for m in pat.finditer(src):
             text = m.group(1)
+            if is_http_header(m):
+                continue
             if text in mapping:
                 spans.append((m.start(1), m.end(1), text))
     if not spans:
