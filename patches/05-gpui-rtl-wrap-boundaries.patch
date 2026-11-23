@@ -1,0 +1,72 @@
+--- a/crates/gpui/src/text_system/line_layout.rs
++++ b/crates/gpui/src/text_system/line_layout.rs
+@@ -222,6 +222,21 @@ impl LineLayout {
+         break_indices.clear();
+         break_indices
+             .extend(LineWrapper::break_indices(text).filter(|index| glyph_indices.contains(index)));
++        // Right-to-left lines are laid out with glyph positions that decrease along the logical
++        // order. Wrapping measures how far the line has advanced, so for those lines each glyph
++        // is measured from the right edge of the line instead, which grows in logical order.
++        let is_right_to_left = {
++            let mut positions = self
++                .runs
++                .iter()
++                .flat_map(|run| run.glyphs.iter().map(|glyph| glyph.position.x));
++            match (positions.next(), positions.last()) {
++                (Some(first), Some(last)) => first > last,
++                _ => false,
++            }
++        };
++        let line_width = self.width;
++        let mut previous_x: Option<Pixels> = None;
+         let mut glyphs = self
+             .runs
+             .iter()
+@@ -235,6 +250,15 @@ impl LineLayout {
+                     )
+                 })
+             })
++            .map(move |(boundary, index, x)| {
++                let measured_x = if is_right_to_left {
++                    line_width - previous_x.unwrap_or(line_width)
++                } else {
++                    x
++                };
++                previous_x = Some(x);
++                (boundary, index, measured_x)
++            })
+             .dedup_by(|(_, previous_index, ..), (_, index, ..)| previous_index == index)
+             .peekable();
+ 
+@@ -967,6 +991,31 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn test_wrap_right_to_left_text_in_logical_order() {
++        // Glyphs come in logical order and their positions decrease from the right edge.
++        let text = "אבג דהו";
++        let indices = [0, 2, 4, 6, 7, 9, 11];
++        let mut layout = make_layout(
++            indices
++                .iter()
++                .enumerate()
++                .map(|(position, index)| glyph_at((6 - position) as f32 * 10., *index))
++                .collect(),
++        );
++        layout.width = px(70.);
++        layout.len = text.len();
++        assert_eq!(
++            layout.compute_wrap_boundaries(text, px(40.), None, &mut WrapScratch::default()),
++            [WrapBoundary {
++                run_ix: 0,
++                glyph_ix: 4
++            }]
++            .into_iter()
++            .collect::<SmallVec<[WrapBoundary; 1]>>(),
++        );
++    }
++
+     #[test]
+     fn test_wrap_ignores_breaks_inside_shaped_clusters() {
+         let text = "x a-bcde";
