@@ -57,25 +57,31 @@ jobs:
             $bitmap.Save("$PWD\shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
             $graphics.Dispose(); $bitmap.Dispose()
           }
-          # The security warning Windows shows for a downloaded file
+          # The security warning Windows shows for a downloaded file, launched the way a double click does it
           foreach ($f in "unsigned", "signed") {
-            Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "Start-Process 'C:\demo\$f.exe'"
-            Start-Sleep 8
+            Start-Process explorer.exe -ArgumentList "C:\demo\$f.exe"
+            Start-Sleep 9
             Shot "warning-$f"
             [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
             Start-Sleep 2
             Get-Process | Where-Object { $_.ProcessName -like "signed*" -or $_.ProcessName -like "unsigned*" } | Stop-Process -Force -ErrorAction SilentlyContinue
           }
-          # File properties, tab by tab, to find the Digital Signatures tab
+          # Properties of the signed file, Digital Signatures tab, then the details window
           $shell = New-Object -ComObject Shell.Application
           $shell.NameSpace("C:\demo").ParseName("signed.exe").InvokeVerb("properties")
           Start-Sleep 4
-          Shot "props-0-general"
-          for ($i = 1; $i -le 5; $i++) {
-            [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
-            Start-Sleep 2
-            Shot "props-$i"
-          }
+          [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+          Start-Sleep 1
+          [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+          Start-Sleep 2
+          [System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+          Start-Sleep 1
+          [System.Windows.Forms.SendKeys]::SendWait("{DOWN}")
+          Start-Sleep 1
+          Shot "sig-list"
+          [System.Windows.Forms.SendKeys]::SendWait("%d")
+          Start-Sleep 3
+          Shot "sig-details"
 
       - name: Upload screenshots
         if: always()
