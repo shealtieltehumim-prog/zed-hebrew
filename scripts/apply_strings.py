@@ -47,15 +47,17 @@ UI_PATTERNS = [re.compile(p) for p in [
     r'\.(?:entry|action|toggleable_entry|custom_entry|link|header|label|submenu)\(\s*' + S,
     r'\.(?:tooltip_text|title|description|placeholder|set_placeholder_text|label_text|tooltip)\(\s*' + S,
     r'Button::new\(\s*"[^"]*"\s*,\s*' + S,
+    r'(?:primary_action_label|secondary_action_label|tooltip_label):\s*' + S + r'\.into\(\)',
     r'ToggleButtonSimple::new\(\s*' + S,
-    r'(?:title|description|label|header|placeholder|summary|name):\s*' + S + r'\.into\(\)',
-    r'(?:title|description|label|header):\s*' + S,
+    r'(?<![A-Za-z_])(?:title|description|label|header|placeholder|summary):\s*' + S + r'\.into\(\)',
+    r'(?<![A-Za-z_])(?:title|description|label|header):\s*' + S,
 ]]
 
 
 def is_test_path(path):
     p = path.replace("\\", "/")
     return ("/tests/" in p or "/benches/" in p or "/examples/" in p
+            or "/fixtures/" in p or "/evals/" in p
             or p.endswith(("_tests.rs", "_test.rs")) or "/test/" in p)
 
 

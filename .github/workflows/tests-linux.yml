@@ -1,0 +1,72 @@
+name: Compare unit tests (vanilla vs Hebrew)
+
+# Runs the same unit tests on untouched upstream Zed and on the translated tree.
+# A test that fails only in the Hebrew tree is either a test that asserts English text
+# (expected) or a real regression (to be fixed), so both result lists are kept.
+on:
+  workflow_dispatch:
+    inputs:
+      zed_ref:
+        description: "Upstream Zed commit SHA (empty = the one pinned in translations/manifest.json)"
+        required: false
+        default: ""
+
+jobs:
+  tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [vanilla, hebrew]
+    steps:
+      - name: Checkout translations
+        uses: actions/checkout@v4
+        with:
+          path: hebrew
+
+      - name: Fetch upstream Zed at the pinned commit
+        run: |
+          ref="${{ github.event.inputs.zed_ref }}"
+          if [ -z "$ref" ]; then ref=$(python3 -c "import json;print(json.load(open('hebrew/translations/manifest.json'))['upstream_commit'])"); fi
+          git init zed
+          git -C zed remote add origin https://github.com/zed-industries/zed.git
+          git -C zed fetch --depth 1 origin "$ref"
+          git -C zed checkout FETCH_HEAD
+
+      - name: Apply Hebrew translations and code patches
+        if: matrix.variant == 'hebrew'
+        run: |
+          python3 hebrew/scripts/apply_strings.py --root zed --manifest hebrew/translations/manifest.json
+          for patch in hebrew/patches/*.patch; do git -C zed apply --whitespace=nowarn "$PWD/$patch"; done
+
+      - name: Install Linux build dependencies
+        working-directory: zed
+        run: ./script/linux
+
+      - name: Run unit tests
+        working-directory: zed
+        continue-on-error: true
+        run: |
+          cargo test --no-fail-fast \
+            -p ui -p title_bar -p settings_ui -p git_ui -p workspace -p project_panel \
+            -p search -p language_selector -p debugger_ui -p terminal_view -p command_palette \
+            -p menu -p tab_switcher -p outline_panel -p keymap_editor \
+            2>&1 | tee ../tests-${{ matrix.variant }}.log
+
+      - name: List failing tests
+        if: always()
+        run: |
+          grep -E "^test .* \.\.\. FAILED" tests-${{ matrix.variant }}.log | sort > failed-${{ matrix.variant }}.txt || true
+          grep -E "^test result" tests-${{ matrix.variant }}.log > summary-${{ matrix.variant }}.txt || true
+          wc -l failed-${{ matrix.variant }}.txt
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.variant }}
+          path: |
+            tests-${{ matrix.variant }}.log
+            failed-${{ matrix.variant }}.txt
+            summary-${{ matrix.variant }}.txt

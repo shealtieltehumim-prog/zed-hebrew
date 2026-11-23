@@ -75,8 +75,6 @@
 "Close": "סגירה",
 "Confirm": "אישור",
 "Upgrade": "שדרוג",
-"Debug application": "דיבאג לאפליקציה",
-"Plain Text": "טקסט רגיל",
 "Add to Agent Thread": "הוספה לשרשור הסוכן",
 "Copy": "העתקה",
 "Copy and Trim": "העתקה וקיצוץ רווחים",
@@ -157,7 +155,6 @@
 "Conflicts marked as resolved": "הקונפליקטים סומנו כנפתרו",
 "Create Pull Request": "יצירת Pull Request",
 "Generating Commit…": "יוצר קומיט…",
-"Git Commit": "קומיט Git",
 "Group By": "קיבוץ לפי",
 "Initialize Repository": "אתחול מאגר",
 "Learn More": "למידע נוסף",
@@ -235,7 +232,6 @@
 "This action is unbound": "לפעולה הזו אין קיצור מקשים",
 "Toggle Exact Match Mode": "הפעלה/כיבוי של התאמה מדויקת",
 "Undo": "ביטול פעולה",
-"Zed Keybind Context": "הקשר קיצורי המקשים של Zed",
 "REC": "הקלטה",
 "SEARCH": "חיפוש",
 "Select Language": "בחירת שפה",
@@ -814,7 +810,6 @@
 "JSX Tag Auto Close": "סגירה אוטומטית של תגיות JSX",
 "Keep Selection On Copy": "שמירת הבחירה בהעתקה",
 "Key-value pairs to add to the terminal's environment.": "זוגות מפתח-ערך להוספה לסביבת הטרמינל.",
-"LLM Providers": "ספקי LLM",
 "LSP Document Colors": "צבעי מסמך LSP",
 "LSP Document Symbols": "סמלי מסמך LSP",
 "LSP Folding Ranges": "טווחי קיפול LSP",
@@ -1474,6 +1469,5 @@
 "Reset to Default": "איפוס לברירת מחדל",
 "Search settings…": "חיפוש בהגדרות…",
 "Test": "בדיקה",
-"View Other Projects": "צפייה בפרויקטים אחרים",
-"project": "פרויקט"
+"View Other Projects": "צפייה בפרויקטים אחרים"
 }
