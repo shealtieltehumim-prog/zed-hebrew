@@ -2,9 +2,13 @@
   "upstream_repo": "zed-industries/zed",
   "upstream_commit": "f126950f9d3b62666f97437ae5d4ccac2272c4db",
   "files": {
-    "crates/zed/src/zed/app_menus.rs": "app_menus.he.json"
+    "crates/zed/src/zed/app_menus.rs": "app_menus.he.json",
+    "crates/extensions_ui/src/components/extension_card.rs": "extension_card.he.json",
+    "crates/settings_ui/src/settings_ui.rs": "settings_ui_misc.he.json"
   },
   "ui_global": [
-    "ui.he.json"
-  ]
+    "ui.he.json",
+    "ui2.he.json"
+  ],
+  "scoped": "scoped.he.json"
 }

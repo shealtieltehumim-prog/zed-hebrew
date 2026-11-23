@@ -37,7 +37,15 @@ def finish(value):
 
 S = r'"((?:[^"\\]|\\.)+)"'
 UI_PATTERNS = [re.compile(p) for p in [
-    r'Label::new\(\s*' + S + r'\s*\)',
+    r'Label::new\(\s*' + S,
+    r'Headline::new\(\s*' + S,
+    r'SettingsSectionHeader::new\(\s*' + S,
+    r'\.(?:heading|button_label|subheading)\(\s*' + S,
+    r'ListBulletItem::new\(\s*' + S,
+    r'Chip::new\(\s*' + S,
+    r'SectionHeader\(\s*' + S,
+    r'\.child\(\s*' + S + r'\s*,?\s*\)',
+    r'(?:InputField::new|ErasedEditor::new)\([^"()]*(?:\([^()]*\))?[^"()]*,\s*' + S,
     r'LabelLike::new\(\s*' + S,
     r'Tooltip::text\(\s*' + S,
     r'Tooltip::simple\(\s*' + S,
@@ -46,7 +54,7 @@ UI_PATTERNS = [re.compile(p) for p in [
     r'Tooltip::for_action_title_in\(\s*' + S,
     r'\.(?:entry|action|toggleable_entry|custom_entry|link|header|label|submenu)\(\s*' + S,
     r'\.(?:tooltip_text|title|description|placeholder|set_placeholder_text|label_text|tooltip)\(\s*' + S,
-    r'Button::new\(\s*"[^"]*"\s*,\s*' + S,
+    r'Button::new\(\s*(?:"[^"]*"|[A-Za-z_][A-Za-z_0-9\.:]*(?:\([^()]*\))?)\s*,\s*' + S,
     r'(?:primary_action_label|secondary_action_label|tooltip_label):\s*' + S + r'\.into\(\)',
     r'ToggleButtonSimple::new\(\s*' + S,
     r'(?<![A-Za-z_])(?:title|description|label|header|placeholder|summary):\s*' + S + r'\.into\(\)',
@@ -90,6 +98,22 @@ def apply_literal_file(path, mapping):
     out = LITERAL.sub(sub, src)
     with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(out)
+    return hits
+
+
+def apply_exact_literals(path, mapping):
+    """Replace every exact `"key"` token (robust against char literals/raw strings in the file)."""
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    hits = {}
+    for key, value in mapping.items():
+        token = '"' + key + '"'
+        count = src.count(token)
+        if count:
+            src = src.replace(token, '"' + finish(value) + '"')
+            hits[key] = count
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(src)
     return hits
 
 
@@ -146,6 +170,19 @@ def main():
         if unused:
             print(f"  unused keys: {unused}")
             failed = failed or not args.lenient
+
+    scoped_name = manifest.get("scoped")
+    if scoped_name:
+        with open(os.path.join(manifest_dir, scoped_name), encoding="utf-8") as f:
+            scoped = json.load(f)
+        for rel_path, mapping in scoped.items():
+            check_safe(mapping, scoped_name)
+            hits = apply_exact_literals(os.path.join(args.root, rel_path), mapping)
+            unused = [k for k in mapping if k not in hits]
+            print(f"{rel_path}: replaced {sum(hits.values())} scoped literals ({len(hits)} distinct)")
+            if unused:
+                print(f"  unused keys: {unused}")
+                failed = failed or not args.lenient
 
     for map_name in manifest.get("ui_global", []):
         with open(os.path.join(manifest_dir, map_name), encoding="utf-8") as f:

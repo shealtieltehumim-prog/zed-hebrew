@@ -1,0 +1,227 @@
+--- a/crates/settings_ui/src/components.rs
++++ b/crates/settings_ui/src/components.rs
+@@ -1,5 +1,6 @@
+ mod dropdown;
+ mod font_picker;
++mod he_labels;
+ mod icon_theme_picker;
+ mod input_field;
+ mod number_field;
+--- a/crates/settings_ui/src/components/dropdown.rs
++++ b/crates/settings_ui/src/components/dropdown.rs
+@@ -7,6 +7,10 @@ use ui::{
+     IconPosition, px,
+ };
+ 
++fn localized(label: String) -> String {
++    super::he_labels::translate(&label).map_or(label, str::to_string)
++}
++
+ #[derive(IntoElement)]
+ pub struct EnumVariantDropdown {
+     id: ElementId,
+@@ -99,7 +103,7 @@ impl RenderOnce for EnumVariantDropdown {
+                     let on_change = self.on_change.clone();
+                     menu = menu.toggleable_entry(
+                         if self.should_do_title_case {
+-                            label.to_title_case()
++                            localized(label.to_title_case())
+                         } else {
+                             label.to_string()
+                         },
+@@ -118,7 +122,7 @@ impl RenderOnce for EnumVariantDropdown {
+         DropdownMenu::new(
+             self.id,
+             if self.should_do_title_case {
+-                current_value_label.to_title_case()
++                localized(current_value_label.to_title_case())
+             } else {
+                 current_value_label.to_string()
+             },
+--- /dev/null
++++ b/crates/settings_ui/src/components/he_labels.rs
+@@ -0,0 +1,184 @@
++//! Hebrew display names for the variant labels shown in settings dropdowns.
++
++pub fn translate(label: &str) -> Option<&'static str> {
++    match label {
++        "Absolute" => Some("מוחלט"),
++        "Active Editor" => Some("העורך הפעיל"),
++        "All" => Some("הכול"),
++        "All Editors" => Some("כל העורכים"),
++        "All Screens" => Some("כל המסכים"),
++        "Alt" => Some("Alt"),
++        "Always" => Some("תמיד"),
++        "Always Collapsed" => Some("תמיד מכווץ"),
++        "Always Expanded" => Some("תמיד מורחב"),
++        "Anywhere" => Some("בכל מקום"),
++        "Auto" => Some("אוטומטי"),
++        "Background" => Some("רקע"),
++        "Bar" => Some("פס"),
++        "Binary" => Some("בינארי"),
++        "Block" => Some("בלוק"),
++        "Bold" => Some("מודגש"),
++        "Border" => Some("מסגרת"),
++        "Both" => Some("שניהם"),
++        "Bottom" => Some("למטה"),
++        "Boundary" => Some("גבול"),
++        "Bounded" => Some("מוגבל"),
++        "Center" => Some("מרכז"),
++        "Channel Invitation" => Some("הזמנה לערוץ"),
++        "Chevron" => Some("חץ"),
++        "Client" => Some("לקוח"),
++        "Close Window" => Some("סגירת החלון"),
++        "Cmd Or Ctrl" => Some("Cmd או Ctrl"),
++        "Collapsed" => Some("מכווץ"),
++        "Combined" => Some("משולב"),
++        "Comfortable" => Some("נוח"),
++        "Contact Request" => Some("בקשת איש קשר"),
++        "Contact Request Accepted" => Some("בקשת איש קשר אושרה"),
++        "Contained" => Some("מוכל"),
++        "Dark" => Some("כהה"),
++        "Decimal" => Some("עשרוני"),
++        "Default" => Some("ברירת מחדל"),
++        "Default Branch" => Some("ענף ברירת מחדל"),
++        "Detect" => Some("זיהוי"),
++        "Directories First" => Some("תיקיות קודם"),
++        "Disabled" => Some("מושבת"),
++        "Down" => Some("למטה"),
++        "Eager" => Some("מיידי"),
++        "Editor Width" => Some("רוחב העורך"),
++        "Empty Tab" => Some("לשונית ריקה"),
++        "Enabled" => Some("מופעל"),
++        "Enforce Crlf" => Some("אכיפת CRLF"),
++        "Enforce Lf" => Some("אכיפת LF"),
++        "Error" => Some("שגיאה"),
++        "Errors" => Some("שגיאות"),
++        "Existing Window" => Some("חלון קיים"),
++        "Expanded" => Some("מורחב"),
++        "Extension" => Some("סיומת"),
++        "Fallback" => Some("גיבוי"),
++        "File Diff" => Some("הבדלי קובץ"),
++        "File Name First" => Some("שם הקובץ קודם"),
++        "File Path First" => Some("נתיב הקובץ קודם"),
++        "Files First" => Some("קבצים קודם"),
++        "Find All References" => Some("מציאת כל ההפניות"),
++        "Fixed" => Some("קבוע"),
++        "Full" => Some("מלא"),
++        "Grayscale" => Some("גווני אפור"),
++        "Gutter" => Some("שוליים"),
++        "Head" => Some("ראש"),
++        "Hidden" => Some("מוסתר"),
++        "Hide" => Some("הסתרה"),
++        "Hide In Full Screen" => Some("הסתרה במסך מלא"),
++        "Hint" => Some("רמז"),
++        "History" => Some("היסטוריה"),
++        "Hollow" => Some("חלול"),
++        "Hover" => Some("ריחוף"),
++        "Icon" => Some("סמל"),
++        "In Comments" => Some("בהערות"),
++        "In Selections" => Some("בבחירות"),
++        "Indent Aware" => Some("מודע להזחה"),
++        "Indexed" => Some("עם אינדקס"),
++        "Infer" => Some("הסקה"),
++        "Info" => Some("מידע"),
++        "Information" => Some("מידע"),
++        "Inherit" => Some("ירושה"),
++        "Inlay" => Some("רמזים בשורה"),
++        "Inline" => Some("בשורה"),
++        "Insert" => Some("הוספה"),
++        "Instruction" => Some("הנחיה"),
++        "Italic" => Some("נטוי"),
++        "Keep Window Open" => Some("השארת החלון פתוח"),
++        "Label Color" => Some("צבע תווית"),
++        "Large" => Some("גדול"),
++        "Last Session" => Some("ההפעלה האחרונה"),
++        "Last Workspace" => Some("סביבת העבודה האחרונה"),
++        "Launchpad" => Some("לוח הפתיחה"),
++        "Left" => Some("שמאל"),
++        "Left Aligned" => Some("מיושר לשמאל"),
++        "Left Neighbour" => Some("שכן שמאלי"),
++        "Left Only" => Some("שמאל בלבד"),
++        "Left Open" => Some("פתוח משמאל"),
++        "Light" => Some("בהיר"),
++        "Line" => Some("שורה"),
++        "Lower" => Some("נמוך"),
++        "Medium" => Some("בינוני"),
++        "Menu" => Some("תפריט"),
++        "Minimum" => Some("מינימום"),
++        "Mixed" => Some("מעורב"),
++        "Modifications" => Some("שינויים"),
++        "Modifications If Available" => Some("שינויים, אם זמין"),
++        "Multi Buffer" => Some("מולטי-באפר"),
++        "Name" => Some("שם"),
++        "Native" => Some("מקורי"),
++        "Neighbour" => Some("שכן"),
++        "Never" => Some("אף פעם"),
++        "New Window" => Some("חלון חדש"),
++        "No" => Some("לא"),
++        "Non Utf8" => Some("לא UTF-8"),
++        "None" => Some("ללא"),
++        "Normal" => Some("רגיל"),
++        "Off" => Some("כבוי"),
++        "On" => Some("פעיל"),
++        "On Typing" => Some("בעת הקלדה"),
++        "On Typing And Action" => Some("בעת הקלדה ופעולה"),
++        "On Yank" => Some("בעת העתקה"),
++        "One Page" => Some("עמוד אחד"),
++        "Open" => Some("פתיחה"),
++        "Path" => Some("נתיב"),
++        "Picker" => Some("בורר"),
++        "Platform Default" => Some("ברירת המחדל של המערכת"),
++        "Prefer Crlf" => Some("עדיפות ל-CRLF"),
++        "Prefer Lf" => Some("עדיפות ל-LF"),
++        "Prefer Line" => Some("עדיפות לשורה"),
++        "Preserve" => Some("שימור"),
++        "Preserve Indent" => Some("שימור הזחה"),
++        "Preview" => Some("תצוגה מקדימה"),
++        "Primary Screen" => Some("המסך הראשי"),
++        "Project Diff" => Some("הבדלי פרויקט"),
++        "Quit App" => Some("יציאה מהיישום"),
++        "Readme" => Some("Readme"),
++        "Relative" => Some("יחסי"),
++        "Replace" => Some("החלפה"),
++        "Replace Subsequence" => Some("החלפת תת-רצף"),
++        "Replace Suffix" => Some("החלפת סיומת"),
++        "Right" => Some("ימין"),
++        "Right Aligned" => Some("מיושר לימין"),
++        "Right Open" => Some("פתוח מימין"),
++        "Same" => Some("זהה"),
++        "Select" => Some("בחירה"),
++        "Selection" => Some("בחירה"),
++        "Server" => Some("שרת"),
++        "Simple" => Some("פשוט"),
++        "Small" => Some("קטן"),
++        "Smart" => Some("חכם"),
++        "Split" => Some("מפוצל"),
++        "Staged Hollow" => Some("חלול לשלב"),
++        "Staging" => Some("שלב"),
++        "Standard" => Some("סטנדרטי"),
++        "Statement" => Some("משפט"),
++        "Status" => Some("מצב"),
++        "Status Bar" => Some("שורת מצב"),
++        "Subpixel" => Some("תת-פיקסל"),
++        "Subtle" => Some("עדין"),
++        "Symbol" => Some("סמל"),
++        "Syntax Aware" => Some("מודע לתחביר"),
++        "System" => Some("מערכת"),
++        "Terminal Controlled" => Some("נשלט על ידי הטרמינל"),
++        "Top" => Some("למעלה"),
++        "Tracked Files" => Some("קבצים במעקב"),
++        "Trailing" => Some("בסוף"),
++        "Underline" => Some("קו תחתון"),
++        "Unicode" => Some("יוניקוד"),
++        "Unified" => Some("מאוחד"),
++        "Unstaged Hollow" => Some("חלול ללא שלב"),
++        "Up" => Some("למעלה"),
++        "Upper" => Some("עליון"),
++        "Vertical Scroll Margin" => Some("שוליים לגלילה אנכית"),
++        "View File" => Some("הצגת קובץ"),
++        "Warning" => Some("אזהרה"),
++        "When Hidden" => Some("כשמוסתר"),
++        "Wrapped" => Some("עטוף"),
++        "X Large" => Some("גדול מאוד"),
++        "Yes" => Some("כן"),
++        _ => None,
++    }
++}

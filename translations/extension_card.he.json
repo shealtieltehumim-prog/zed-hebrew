@@ -1,0 +1,14 @@
+{
+ "Themes": "ערכות נושא",
+ "Icon Themes": "ערכות סמלים",
+ "Languages": "שפות",
+ "Grammars": "דקדוקים",
+ "Language Servers": "שרתי שפה",
+ "MCP Servers": "שרתי MCP",
+ "Agent Servers": "שרתי סוכן",
+ "Slash Commands": "פקודות Slash",
+ "Indexed Docs Providers": "ספקי תיעוד מאונדקס",
+ "Snippets": "קטעי קוד",
+ "Debug Adapters": "מתאמי דיבאג",
+ "Downloads: {}": "הורדות: {}"
+}

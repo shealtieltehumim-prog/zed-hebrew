@@ -1,0 +1,151 @@
+{
+ "crates/editor/src/editor.rs": {
+  "Right-click for more options": "לחיצה ימנית לאפשרויות נוספות",
+  "No executable code is associated with this line.": "אין קוד שניתן להרצה המשויך לשורה זו."
+ },
+ "crates/language_model_selector/src/language_model_selector.rs": {
+  "Select a Model": "בחירת מודל"
+ },
+ "crates/ui/src/components/toggle.rs": {
+  "Enable notifications": "הפעלת התראות"
+ },
+ "crates/settings_ui/src/settings_ui.rs": {
+  "Change": "שינוי"
+ },
+ "crates/settings_ui/src/pages/skill_creator.rs": {
+  "Body is required.": "נדרש גוף ההודעה.",
+  "Disable model invocation": "השבתת הפעלת מודל"
+ },
+ "crates/settings_ui/src/pages/sandbox_settings.rs": {
+  "Enable Sandbox": "הפעלת ארגז חול",
+  "Allow All Domains": "אישור כל הדומיינים",
+  "Allow All File System Writes": "אישור כל הכתיבות למערכת הקבצים",
+  "Warn About Confusable Unicode": "אזהרה על יוניקוד מבלבל",
+  "Warn About Windows-Drive Grants": "אזהרה על הרשאות לכונני Windows"
+ },
+ "crates/settings_ui/src/pages/mcp_servers_page.rs": {
+  "1 tool": "כלי אחד"
+ },
+ "crates/auto_update/src/auto_update.rs": {
+  "Auto-updates disabled for non-bundled app.": "עדכונים אוטומטיים מושבתים ביישום שאינו ארוז."
+ },
+ "crates/collab_ui/src/collab_panel.rs": {
+  "Current Call": "שיחה נוכחית",
+  "Favorites": "מועדפים",
+  "Requests": "בקשות",
+  "Channels": "ערוצים",
+  "Invites": "הזמנות",
+  "Online": "מחובר",
+  "Offline": "לא מחובר",
+  "Copy Public Channel Link": "העתקת קישור לערוץ הציבורי",
+  "Copy Private Channel Link": "העתקת קישור לערוץ הפרטי",
+  "Collab Panel": "לוח שיתוף הפעולה"
+ },
+ "crates/debugger_ui/src/debugger_panel.rs": {
+  "Debug Panel": "לוח הדיבאג"
+ },
+ "crates/acp_tools/src/acp_tools.rs": {
+  "No connection selected": "לא נבחר חיבור"
+ },
+ "crates/workspace/src/workspace.rs": {
+  "Open in This Window": "פתיחה בחלון זה",
+  "Leaving this call will unshare your current project.": "עזיבת השיחה תפסיק את שיתוף הפרויקט הנוכחי."
+ },
+ "crates/workspace/src/security_modal.rs": {
+  "Trust all single files": "אמון בכל הקבצים הבודדים",
+  "Trust all projects in the parent folders": "אמון בכל הפרויקטים בתיקיות האב"
+ },
+ "crates/tabular_data_preview/src/tabular_data_preview.rs": {
+  "Tabular Data Preview": "תצוגה מקדימה של נתונים טבלאיים"
+ },
+ "crates/tabular_data_preview/src/renderer/settings.rs": {
+  "Choose vertical text alignment within cells": "בחרו יישור אנכי של טקסט בתוך תאים",
+  "Choose how filter values are sorted in the filter menu": "בחרו כיצד ערכי המסנן ממוינים בתפריט המסננים"
+ },
+ "crates/project_panel/src/project_panel.rs": {
+  "This cannot be undone.": "לא ניתן לבטל פעולה זו."
+ },
+ "crates/title_bar/src/collab.rs": {
+  "Unknown screen": "מסך לא ידוע"
+ },
+ "crates/title_bar/src/onboarding_banner.rs": {
+  "Introducing:": "מציגים:"
+ },
+ "crates/remote/src/remote_client.rs": {
+  "Waiting for existing connection attempt": "ממתין לניסיון חיבור קיים"
+ },
+ "crates/remote/src/transport.rs": {
+  "Compressing binary": "דוחס את הקובץ הבינארי"
+ },
+ "crates/remote/src/transport/docker.rs": {
+  "Extracting remote development server": "מחלץ את שרת הפיתוח המרוחק",
+  "Uploading remote development server": "מעלה את שרת הפיתוח המרוחק",
+  "Downloading remote development server on host": "מוריד את שרת הפיתוח המרוחק במארח",
+  "Starting proxy": "מפעיל פרוקסי"
+ },
+ "crates/remote/src/transport/ssh.rs": {
+  "Starting proxy": "מפעיל פרוקסי",
+  "Connecting (reusing session)": "מתחבר (שימוש חוזר בהפעלה)",
+  "Connecting": "מתחבר",
+  "Downloading remote development server on host": "מוריד את שרת הפיתוח המרוחק במארח",
+  "Uploading remote development server": "מעלה את שרת הפיתוח המרוחק",
+  "Extracting remote development server": "מחלץ את שרת הפיתוח המרוחק"
+ },
+ "crates/remote/src/transport/wsl.rs": {
+  "Detecting WSL environment": "מזהה סביבת WSL",
+  "Uploading remote server": "מעלה את השרת המרוחק",
+  "Streaming remote server into WSL": "מזרים את השרת המרוחק אל WSL",
+  "Extracting remote server": "מחלץ את השרת המרוחק",
+  "Starting proxy": "מפעיל פרוקסי"
+ },
+ "crates/toolchain_selector/src/active_toolchain.rs": {
+  "Toolchain": "שרשרת כלים"
+ },
+ "crates/toolchain_selector/src/toolchain_selector.rs": {
+  "worktree root": "שורש עץ העבודה"
+ },
+ "crates/copilot_ui/src/sign_in.rs": {
+  "Signing out of Copilot Edit Predictions…": "מתנתק מהשלמות העריכה של Copilot…",
+  "Signed out of Copilot Edit Predictions": "התנתקתם מהשלמות העריכה של Copilot",
+  "Copilot Edit Predictions has started.": "השלמות העריכה של Copilot התחילו לפעול."
+ },
+ "crates/git_ui/src/git_panel.rs": {
+  "Open a directory first": "פתחו תיקייה תחילה",
+  "All conflicts marked as resolved": "כל ההתנגשויות סומנו כפתורות"
+ },
+ "crates/git_ui/src/branch_picker.rs": {
+  "Remote name can't be empty": "שם השלט לא יכול להיות ריק"
+ },
+ "crates/onboarding/src/basics_page.rs": {
+  "Light": "בהיר",
+  "Dark": "כהה",
+  "System": "מערכת"
+ },
+ "crates/agent_ui/src/profile_selector.rs": {
+  "Get help to write anything.": "עזרה בכתיבת כל דבר.",
+  "Chat about your codebase.": "שיחה על בסיס הקוד שלכם.",
+  "Chat about anything with no tools.": "שיחה על כל נושא, ללא כלים."
+ },
+ "crates/agent_ui/src/conversation_view.rs": {
+  "Use the application login": "שימוש בהתחברות של היישום",
+  "Model unavailable": "המודל לא זמין"
+ },
+ "crates/agent_ui/src/model_selector_popover.rs": {
+  "Select a Model": "בחירת מודל"
+ },
+ "crates/agent_ui/src/conversation_view/subagent_card.rs": {
+  "The subagent's model refused to continue.": "המודל של תת-הסוכן סירב להמשיך."
+ },
+ "crates/agent_ui/src/conversation_view/thread_view.rs": {
+  "Disable Thinking Mode": "כיבוי מצב חשיבה",
+  "Enable Thinking Mode": "הפעלת מצב חשיבה"
+ },
+ "crates/diagnostics/src/diagnostics.rs": {
+  "No problems in workspace": "אין בעיות בסביבת העבודה",
+  "No errors in workspace": "אין שגיאות בסביבת העבודה"
+ },
+ "crates/open_path_prompt/src/open_path_prompt.rs": {
+  "Type a path…": "הקלידו נתיב…",
+  "No such file or directory": "אין קובץ או תיקייה כאלה"
+ }
+}
