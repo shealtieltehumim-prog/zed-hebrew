@@ -31,6 +31,9 @@ jobs:
       CARGO_TARGET_DIR: D:\zed-target
       # Smaller and faster to link; this is an experimental build, not a release
       CARGO_PROFILE_RELEASE_FAST_DEBUG: "0"
+      # Compiled into the editor: its own build number and the server it updates from
+      ZED_HEBREW_BUILD: ${{ github.run_number }}
+      ZED_HEBREW_UPDATE_SERVER: ${{ vars.ZED_HEBREW_UPDATE_SERVER || 'https://zed-updates.shealtiel.link' }}
     steps:
       - name: Checkout translations
         uses: actions/checkout@v4
@@ -86,7 +89,7 @@ jobs:
 
       - name: Build zed.exe
         working-directory: zed
-        run: cargo build --profile release-fast --package zed
+        run: cargo build --profile release-fast --package zed --package cli --package auto_update_helper
 
       - name: Smoke test (launch Zed, drive the panels, take screenshots)
         continue-on-error: true
@@ -100,6 +103,62 @@ jobs:
           name: smoke-${{ github.event.inputs.variant }}-bidi-${{ github.event.inputs.bidi_wrap }}
           path: smoke/
           if-no-files-found: ignore
+
+      - name: Build the installer
+        if: github.event.inputs.variant != 'vanilla'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = "$env:CARGO_TARGET_DIR\release-fast"
+          $inno = "$PWD\inno"
+          if (Test-Path $inno) { Remove-Item $inno -Recurse -Force }
+          Copy-Item "zed\crates\zed\resources\windows" $inno -Recurse
+          foreach ($dir in "bin", "tools", "x64", "arm64") { New-Item -ItemType Directory -Force "$inno\$dir" | Out-Null }
+
+          # The editor and its friends, laid out like the upstream installer expects
+          Copy-Item "$out\zed.exe" "$inno\Zed.exe"
+          Copy-Item "$out\cli.exe" "$inno\bin\Zed.exe"
+          Copy-Item "$inno\zed.sh" "$inno\bin\zed" -Force
+          Copy-Item "$out\auto-update-helper.exe" "$inno\tools\auto_update_helper.exe"
+
+          # ConPTY (terminal) and the AMD GPU helper, downloaded the same way upstream does
+          Invoke-WebRequest "https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg" -OutFile conpty.zip
+          Expand-Archive conpty.zip -DestinationPath conpty -Force
+          Copy-Item "conpty\runtimes\win-x64\native\conpty.dll" "$inno\conpty.dll"
+          Copy-Item "conpty\build\native\runtimes\x64\OpenConsole.exe" "$inno\x64\OpenConsole.exe"
+          Copy-Item "conpty\build\native\runtimes\arm64\OpenConsole.exe" "$inno\arm64\OpenConsole.exe"
+          Invoke-WebRequest "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0" -OutFile ags.zip
+          Expand-Archive ags.zip -DestinationPath . -Force
+          Copy-Item "AGS_SDK-6.3.0\ags_lib\lib\amd_ags_x64.dll" "$inno\amd_ags_x64.dll"
+
+          # Explorer context-menu package (appx) is not built here, so drop it from the script
+          $iss = Get-Content "$inno\zed.iss" | Where-Object { $_ -notmatch 'appx\\\*' -and $_ -notmatch 'Remove-AppxPackage -Package ""' }
+          Set-Content "$inno\zed.iss" $iss
+
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $zedRoot = (Resolve-Path zed).Path
+          New-Item -ItemType Directory -Force installer | Out-Null
+          $outDir = (Resolve-Path installer).Path
+          & $iscc "$inno\zed.iss" `
+            "/dAppId={{B6E7C1A4-5D3F-4F7A-9C2E-7A1D4E8F2B90}" `
+            "/dAppIconName=app-icon-dev" `
+            "/dOutputDir=$outDir" `
+            "/dAppSetupName=Zed-Hebrew-Setup-x86_64" `
+            "/dAppName=Zed Hebrew" `
+            "/dAppDisplayName=Zed Hebrew" `
+            "/dRegValueName=ZedHebrew" `
+            "/dAppMutex=Zed-Dev-Instance-Mutex" `
+            "/dAppExeName=Zed" `
+            "/dResourcesDir=$inno" `
+            "/dShellNameShort=Z&ed Hebrew" `
+            "/dAppUserId=ZedIndustries.Zed.Dev" `
+            "/dVersion=0.0.${{ github.run_number }}" `
+            "/dSourceDir=$zedRoot" `
+            "/dAppxFullName=ZedIndustries.Zed.Dev_1.0.0.0_neutral__japxn1gcva8rg"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $LASTEXITCODE" }
+          Get-Item "installer\Zed-Hebrew-Setup-x86_64.exe" | Select-Object Name, Length
+          (Get-FileHash "installer\Zed-Hebrew-Setup-x86_64.exe" -Algorithm SHA256).Hash | Set-Content "installer\Zed-Hebrew-Setup-x86_64.exe.sha256"
 
       - name: Package
         if: github.event.inputs.variant != 'vanilla'
@@ -123,7 +182,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "build-${{ github.run_number }}"
-          gh release create $tag zed-hebrew-windows-x64.zip zed-hebrew-windows-x64.zip.sha256 `
+          gh release create $tag zed-hebrew-windows-x64.zip zed-hebrew-windows-x64.zip.sha256 installer/Zed-Hebrew-Setup-x86_64.exe installer/Zed-Hebrew-Setup-x86_64.exe.sha256 `
             --repo "${{ github.repository }}" `
             --title "Hebrew Zed experimental build ${{ github.run_number }} (bidi_wrap=${{ github.event.inputs.bidi_wrap }})" `
             --notes "Experimental. Upstream Zed commit: $env:ZED_SHA" `

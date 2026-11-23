@@ -1,0 +1,89 @@
+--- a/crates/auto_update/src/auto_update.rs
++++ b/crates/auto_update/src/auto_update.rs
+@@ -109,6 +109,22 @@
+     ]
+ );
+ 
++/// Where the Hebrew build asks for updates. Override at build time with `ZED_HEBREW_UPDATE_SERVER`.
++const HEBREW_UPDATE_SERVER: &str = match option_env!("ZED_HEBREW_UPDATE_SERVER") {
++    Some(server) => server,
++    None => "https://zed-updates.shealtiel.link",
++};
++
++/// Build number of this binary (set by CI as `ZED_HEBREW_BUILD`). The update server reports the
++/// newest build as version `0.0.<build>`, so the editor only has to compare build numbers.
++const HEBREW_BUILD: u64 = match option_env!("ZED_HEBREW_BUILD") {
++    Some(build) => match u64::from_str_radix(build, 10) {
++        Ok(build) => build,
++        Err(_) => 0,
++    },
++    None => 0,
++};
++
+ #[derive(Serialize, Debug)]
+ pub struct AssetQuery<'a> {
+     asset: &'a str,
+@@ -705,17 +721,24 @@
+         let http_client = client.http_client();
+ 
+         let path = format!("/releases/{}/{}/asset", release_channel.dev_name(), version,);
+-        let url = http_client.build_zed_cloud_url_with_query(
+-            &path,
+-            AssetQuery {
+-                os,
+-                arch,
+-                asset,
+-                metrics_id: metrics_id.as_deref(),
+-                system_id: system_id.as_deref(),
+-                is_staff,
+-            },
+-        )?;
++        let url = if release_channel == ReleaseChannel::Dev {
++            // The Hebrew build talks only to its own update server and sends no telemetry ids.
++            format!("{HEBREW_UPDATE_SERVER}{path}?os={os}&arch={arch}&asset={asset}")
++        } else {
++            http_client
++                .build_zed_cloud_url_with_query(
++                    &path,
++                    AssetQuery {
++                        os,
++                        arch,
++                        asset,
++                        metrics_id: metrics_id.as_deref(),
++                        system_id: system_id.as_deref(),
++                        is_staff,
++                    },
++                )?
++                .to_string()
++        };
+ 
+         let mut response = http_client
+             .get(url.as_str(), Default::default(), true)
+@@ -887,6 +910,15 @@
+                 };
+                 Ok(should_download.then_some(fetched_version))
+             }
++            ReleaseChannel::Dev => {
++                // Hebrew build: versions are `0.0.<build number>`.
++                let current_build = if let AutoUpdateStatus::Updated { version } = status {
++                    version.patch
++                } else {
++                    HEBREW_BUILD
++                };
++                Ok((fetched_version.patch > current_build).then_some(fetched_version))
++            }
+             _ => {
+                 let current_version = if let AutoUpdateStatus::Updated { version } = status {
+                     version
+--- a/crates/release_channel/src/lib.rs
++++ b/crates/release_channel/src/lib.rs
+@@ -199,7 +199,8 @@
+ 
+     /// Returns whether we want to poll for updates for this [`ReleaseChannel`]
+     pub fn poll_for_updates(&self) -> bool {
+-        !matches!(self, ReleaseChannel::Dev)
++        // The Hebrew build is the Dev channel and updates itself from its own server.
++        true
+     }
+ 
+     /// Returns the display name for this [`ReleaseChannel`].
