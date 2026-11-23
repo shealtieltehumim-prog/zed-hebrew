@@ -57,15 +57,8 @@ jobs:
             $bitmap.Save("$PWD\shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
             $graphics.Dispose(); $bitmap.Dispose()
           }
-          # The security warning Windows shows for a downloaded file, launched the way a double click does it
-          foreach ($f in "unsigned", "signed") {
-            Start-Process explorer.exe -ArgumentList "C:\demo\$f.exe"
-            Start-Sleep 9
-            Shot "warning-$f"
-            [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
-            Start-Sleep 2
-            Get-Process | Where-Object { $_.ProcessName -like "signed*" -or $_.ProcessName -like "unsigned*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-          }
+          Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class M { [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y); [DllImport("user32.dll")] public static extern void mouse_event(int f, int dx, int dy, int d, int e); }'
+          function Click($x, $y) { [M]::SetCursorPos($x, $y); Start-Sleep -Milliseconds 400; [M]::mouse_event(2, 0, 0, 0, 0); [M]::mouse_event(4, 0, 0, 0, 0) }
           # Properties of the signed file, Digital Signatures tab, then the details window
           $shell = New-Object -ComObject Shell.Application
           $shell.NameSpace("C:\demo").ParseName("signed.exe").InvokeVerb("properties")
@@ -82,6 +75,21 @@ jobs:
           [System.Windows.Forms.SendKeys]::SendWait("%d")
           Start-Sleep 3
           Shot "sig-details"
+          [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+          Start-Sleep 1
+          [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+          Start-Sleep 2
+          # The SmartScreen warning for a downloaded file, with More info opened
+          foreach ($f in "unsigned", "signed") {
+            Start-Process explorer.exe -ArgumentList "C:\demo\$f.exe"
+            Start-Sleep 9
+            Click 298 228
+            Start-Sleep 2
+            Shot "more-info-$f"
+            Click 754 114
+            Start-Sleep 2
+            Get-Process | Where-Object { $_.ProcessName -like "signed*" -or $_.ProcessName -like "unsigned*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Upload screenshots
         if: always()
