@@ -39,7 +39,12 @@
   "Offline": "לא מחובר",
   "Copy Public Channel Link": "העתקת קישור לערוץ הציבורי",
   "Copy Private Channel Link": "העתקת קישור לערוץ הפרטי",
-  "Collab Panel": "לוח שיתוף הפעולה"
+  "Collab Panel": "לוח שיתוף הפעולה",
+  "Work with your team in realtime with collaborative editing, voice, shared notes and more.": "עבדו עם הצוות בזמן אמת: עריכה משותפת, שיחות קוליות, הערות משותפות ועוד.",
+  "Sign In with GitHub": "התחברות עם GitHub",
+  "Connecting…": "מתחבר…",
+  "Connect": "התחברות",
+  "Signing in…": "מתחבר…"
  },
  "crates/debugger_ui/src/debugger_panel.rs": {
   "Debug Panel": "לוח הדיבאג"
@@ -53,7 +58,9 @@
  },
  "crates/workspace/src/security_modal.rs": {
   "Trust all single files": "אמון בכל הקבצים הבודדים",
-  "Trust all projects in the parent folders": "אמון בכל הפרויקטים בתיקיות האב"
+  "Trust all projects in the parent folders": "אמון בכל הפרויקטים בתיקיות האב",
+  "Unrecognized Project": "פרויקט לא מזוהה",
+  "Unrecognized Projects ({})": "פרויקטים לא מזוהים ({})"
  },
  "crates/tabular_data_preview/src/tabular_data_preview.rs": {
   "Tabular Data Preview": "תצוגה מקדימה של נתונים טבלאיים"
@@ -111,7 +118,9 @@
  },
  "crates/git_ui/src/git_panel.rs": {
   "Open a directory first": "פתחו תיקייה תחילה",
-  "All conflicts marked as resolved": "כל ההתנגשויות סומנו כפתורות"
+  "All conflicts marked as resolved": "כל ההתנגשויות סומנו כפתורות",
+  "Changes": "שינויים",
+  "History": "היסטוריה"
  },
  "crates/git_ui/src/branch_picker.rs": {
   "Remote name can't be empty": "שם השלט לא יכול להיות ריק"
@@ -128,7 +137,10 @@
  },
  "crates/agent_ui/src/conversation_view.rs": {
   "Use the application login": "שימוש בהתחברות של היישום",
-  "Model unavailable": "המודל לא זמין"
+  "Model unavailable": "המודל לא זמין",
+  "Message the {}, @ to include context, / for commands": "הודעה אל {}, @ להוספת הקשר, / לפקודות",
+  "Message {} — @ to include context, / for commands": "הודעה אל {} — @ להוספת הקשר, / לפקודות",
+  "Message {} — @ to include context": "הודעה אל {} — @ להוספת הקשר"
  },
  "crates/agent_ui/src/model_selector_popover.rs": {
   "Select a Model": "בחירת מודל"
@@ -147,5 +159,25 @@
  "crates/open_path_prompt/src/open_path_prompt.rs": {
   "Type a path…": "הקלידו נתיב…",
   "No such file or directory": "אין קובץ או תיקייה כאלה"
+ },
+ "crates/git_ui/src/branch_diff.rs": {
+  "Changes": "שינויים"
+ },
+ "crates/keymap_editor/src/keymap_editor.rs": {
+  "Keymap Editor": "עורך מפת מקשים",
+  "Action": "פעולה",
+  "Arguments": "ארגומנטים",
+  "Keystrokes": "מקשים",
+  "Context": "הקשר",
+  "Source": "מקור"
+ },
+ "crates/agent_ui/src/agent_panel.rs": {
+  "New {} Thread": "שרשור {} חדש"
+ },
+ "crates/outline_panel/src/outline_panel.rs": {
+  "No outlines available": "אין קווי מתאר זמינים"
+ },
+ "crates/agent_ui/src/draft_prompt_store.rs": {
+  "New {} Thread": "שרשור {} חדש"
  }
 }

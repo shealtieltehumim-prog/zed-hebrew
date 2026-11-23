@@ -1,0 +1,20 @@
+diff --git a/crates/ui/src/components/keybinding_hint.rs b/crates/ui/src/components/keybinding_hint.rs
+index da010e6..26f4997 100644
+--- a/crates/ui/src/components/keybinding_hint.rs
++++ b/crates/ui/src/components/keybinding_hint.rs
+@@ -227,7 +227,14 @@ impl RenderOnce for KeybindingHint {
+ 
+         let mut base = h_flex();
+ 
+-        base.text_style().font_style = Some(FontStyle::Italic);
++        // Italic distorts Hebrew glyphs at this small size, so skip it when a label has Hebrew.
++        let has_hebrew = |text: &Option<SharedString>| {
++            text.as_ref()
++                .is_some_and(|text| text.chars().any(|c| ('\u{0590}'..='\u{05FF}').contains(&c)))
++        };
++        if !has_hebrew(&self.prefix) && !has_hebrew(&self.suffix) {
++            base.text_style().font_style = Some(FontStyle::Italic);
++        }
+ 
+         base.gap_1()
+             .font_buffer(cx)
