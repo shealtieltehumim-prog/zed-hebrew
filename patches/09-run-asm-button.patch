@@ -1,0 +1,321 @@
+diff --git a/crates/zed/src/zed.rs b/crates/zed/src/zed.rs
+index 4d13f97..0a3db51 100644
+--- a/crates/zed/src/zed.rs
++++ b/crates/zed/src/zed.rs
+@@ -8,6 +8,7 @@ pub(crate) mod move_to_applications;
+ mod open_listener;
+ mod open_url_modal;
+ mod quick_action_bar;
++mod run_asm_button;
+ pub mod remote_debug;
+ pub mod telemetry_log;
+ #[cfg(all(target_os = "macos", feature = "visual-tests"))]
+@@ -600,6 +601,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
+         let diagnostic_summary =
+             cx.new(|cx| diagnostics::items::DiagnosticIndicator::new(workspace, cx));
+         let active_file_name = cx.new(|_| workspace::active_file_name::ActiveFileName::new());
++        let run_asm_button = cx.new(|_| run_asm_button::RunAsmButton::new(workspace));
+         let activity_indicator = activity_indicator::ActivityIndicator::new(workspace, window, cx);
+         let active_buffer_encoding =
+             cx.new(|_| encoding_selector::ActiveBufferEncoding::new(workspace));
+@@ -633,6 +635,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
+             status_bar.add_left_item(lsp_button, window, cx);
+             status_bar.add_left_item(diagnostic_summary, window, cx);
+             status_bar.add_left_item(active_file_name, window, cx);
++            status_bar.add_left_item(run_asm_button, window, cx);
+             status_bar.add_left_item(git_blame_status, window, cx);
+             status_bar.add_left_item(merge_conflict_indicator, window, cx);
+             status_bar.add_left_item(activity_indicator, window, cx);
+diff --git a/crates/zed/src/zed/run_asm_button.rs b/crates/zed/src/zed/run_asm_button.rs
+new file mode 100644
+index 0000000..01f3399
+--- /dev/null
++++ b/crates/zed/src/zed/run_asm_button.rs
+@@ -0,0 +1,287 @@
++//! A small "run" button in the status bar for assembly files.
++//!
++//! Clicking it saves the file and, in the background (no terminal window), assembles it with
++//! `nasm`, links it with `ld` and runs the result - on Windows through WSL. The outcome (program
++//! output, exit code or the assembler/linker errors) is shown in a toast.
++
++use std::path::Path;
++
++use editor::Editor;
++use gpui::{App, Context, Entity, IntoElement, ParentElement, Render, Subscription, WeakEntity, Window};
++use ui::{Button, Icon, IconName, IconSize, LabelSize, Tooltip, prelude::*};
++use util::command::new_command;
++use workspace::{
++    HideStatusItem, StatusItemView, Toast, Workspace, item::ItemHandle,
++    notifications::NotificationId,
++};
++
++/// Runs inside bash (in WSL on Windows). `$1` is the file name, relative to the file's directory.
++const BUILD_AND_RUN_SCRIPT: &str = concat!(
++    "f=\"$1\"; n=\"${f%.*}\"; ",
++    "nasm -f elf64 -g -F dwarf \"$f\" -o \"$n.o\" 2>&1 || { echo \"__FAIL__:nasm\"; exit 0; }; ",
++    "ld \"$n.o\" -o \"$n\" 2>&1 || { echo \"__FAIL__:ld\"; exit 0; }; ",
++    "timeout 10 \"./$n\" 2>&1; c=$?; echo; echo \"__EXIT__:$c\""
++);
++
++pub struct RunAsmButton {
++    workspace: WeakEntity<Workspace>,
++    active_editor: Option<WeakEntity<Editor>>,
++    is_assembly: bool,
++    _observe_active_editor: Option<Subscription>,
++}
++
++impl RunAsmButton {
++    pub fn new(workspace: &Workspace) -> Self {
++        Self {
++            workspace: workspace.weak_handle(),
++            active_editor: None,
++            is_assembly: false,
++            _observe_active_editor: None,
++        }
++    }
++
++    fn update(&mut self, editor: Entity<Editor>, cx: &mut Context<Self>) {
++        let is_assembly = editor
++            .read(cx)
++            .buffer()
++            .read(cx)
++            .as_singleton()
++            .and_then(|buffer| {
++                buffer
++                    .read(cx)
++                    .file()
++                    .and_then(|file| file.as_local())
++                    .map(|file| is_assembly_path(&file.abs_path(cx)))
++            })
++            .unwrap_or(false);
++        if self.is_assembly != is_assembly {
++            self.is_assembly = is_assembly;
++            cx.notify();
++        }
++        self.active_editor = Some(editor.downgrade());
++    }
++
++    fn show_message(&self, message: String, cx: &mut Context<Self>) {
++        self.workspace
++            .update(cx, |workspace, cx| {
++                workspace.show_toast(
++                    Toast::new(NotificationId::unique::<RunAsmButton>(), message),
++                    cx,
++                );
++            })
++            .ok();
++    }
++
++    fn run(&mut self, window: &mut Window, cx: &mut Context<Self>) {
++        let Some(editor) = self.active_editor.as_ref().and_then(|editor| editor.upgrade()) else {
++            return;
++        };
++        let Some(buffer) = editor.read(cx).buffer().read(cx).as_singleton() else {
++            return;
++        };
++        let Some(abs_path) = buffer
++            .read(cx)
++            .file()
++            .and_then(|file| file.as_local())
++            .map(|file| file.abs_path(cx))
++        else {
++            self.show_message("✘ אפשר להריץ רק קובץ שנשמר במחשב".to_string(), cx);
++            return;
++        };
++        let Some(project) = self
++            .workspace
++            .upgrade()
++            .map(|workspace| workspace.read(cx).project().clone())
++        else {
++            return;
++        };
++
++        self.show_message("⏳ שומר, בונה ומריץ…".to_string(), cx);
++        let save = project.update(cx, |project, cx| project.save_buffer(buffer, cx));
++        let workspace = self.workspace.clone();
++        cx.spawn_in(window, async move |_this, cx| {
++            let message = match save.await {
++                Ok(()) => {
++                    cx.background_executor()
++                        .spawn(async move { build_and_run(&abs_path).await })
++                        .await
++                }
++                Err(error) => format!("✘ השמירה נכשלה: {error}"),
++            };
++            workspace
++                .update(cx, |workspace, cx| {
++                    workspace.show_toast(
++                        Toast::new(NotificationId::unique::<RunAsmButton>(), message),
++                        cx,
++                    );
++                })
++                .ok();
++        })
++        .detach();
++    }
++}
++
++fn is_assembly_path(path: &Path) -> bool {
++    path.extension()
++        .and_then(|extension| extension.to_str())
++        .map(|extension| {
++            matches!(
++                extension.to_ascii_lowercase().as_str(),
++                "asm" | "nasm" | "s"
++            )
++        })
++        .unwrap_or(false)
++}
++
++/// Builds and runs `path`, returning the Hebrew message to show to the user.
++async fn build_and_run(path: &Path) -> String {
++    let (Some(dir), Some(file_name)) = (path.parent(), path.file_name()) else {
++        return "✘ לא הצלחתי להבין את נתיב הקובץ".to_string();
++    };
++
++    let mut command: util::command::Command;
++    if cfg!(target_os = "windows") {
++        command = new_command("wsl.exe");
++        command
++            .arg("--cd")
++            .arg(dir)
++            .arg("-e")
++            .arg("bash")
++            .arg("-c")
++            .arg(BUILD_AND_RUN_SCRIPT)
++            .arg("bash")
++            .arg(file_name);
++    } else {
++        command = new_command("bash");
++        command
++            .arg("-c")
++            .arg(BUILD_AND_RUN_SCRIPT)
++            .arg("bash")
++            .arg(file_name)
++            .current_dir(dir);
++    }
++    command.stdin(util::command::Stdio::null());
++
++    let output = match command.output().await {
++        Ok(output) => output,
++        Err(error) => {
++            return format!(
++                "✘ לא הצלחתי להפעיל את הבנייה: {error}\n(האם WSL ו-nasm מותקנים?)"
++            );
++        }
++    };
++    let mut text = String::from_utf8_lossy(&output.stdout).replace(['\0', '\r'], "");
++    let stderr = String::from_utf8_lossy(&output.stderr).replace(['\0', '\r'], "");
++    if !stderr.trim().is_empty() {
++        text.push('\n');
++        text.push_str(&stderr);
++    }
++    format_result(&text)
++}
++
++fn format_result(text: &str) -> String {
++    let mut body_lines = Vec::new();
++    let mut fail_stage = None;
++    let mut exit_code = None;
++    for line in text.lines() {
++        if let Some(stage) = line.strip_prefix("__FAIL__:") {
++            fail_stage = Some(stage.trim().to_string());
++        } else if let Some(code) = line.strip_prefix("__EXIT__:") {
++            exit_code = code.trim().parse::<i32>().ok();
++        } else {
++            body_lines.push(line);
++        }
++    }
++    while body_lines.last().is_some_and(|line| line.trim().is_empty()) {
++        body_lines.pop();
++    }
++    let body = shorten(&body_lines.join("\n"));
++
++    match (fail_stage.as_deref(), exit_code) {
++        (Some("nasm"), _) => format!("✘ שגיאת הרכבה (nasm):\n{body}"),
++        (Some(_), _) => format!("✘ שגיאת קישור (ld):\n{body}"),
++        (None, Some(code)) => {
++            let meaning = match code {
++                124 => " - התוכנית נעצרה אחרי 10 שניות",
++                132 => " - הוראה לא חוקית (Illegal instruction)",
++                139 => " - קריסת זיכרון (Segmentation fault)",
++                _ => "",
++            };
++            let header = format!("✔ הסתיים - קוד יציאה: {code}{meaning}");
++            if body.trim().is_empty() {
++                header
++            } else {
++                format!("{header}\n{body}")
++            }
++        }
++        (None, None) => {
++            if body.trim().is_empty() {
++                "✘ לא התקבלה תוצאה מהבנייה (בדוק ש-WSL ו-nasm מותקנים)".to_string()
++            } else {
++                format!("✘ תוצאה לא צפויה מהבנייה:\n{body}")
++            }
++        }
++    }
++}
++
++fn shorten(text: &str) -> String {
++    const MAX_LINES: usize = 12;
++    const MAX_CHARS: usize = 700;
++    let mut lines: Vec<&str> = text.lines().take(MAX_LINES + 1).collect();
++    let mut truncated = false;
++    if lines.len() > MAX_LINES {
++        lines.truncate(MAX_LINES);
++        truncated = true;
++    }
++    let mut result = lines.join("\n");
++    if result.chars().count() > MAX_CHARS {
++        result = result.chars().take(MAX_CHARS).collect();
++        truncated = true;
++    }
++    if truncated {
++        result.push_str("\n…");
++    }
++    result
++}
++
++impl Render for RunAsmButton {
++    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
++        div().when(self.is_assembly, |element| {
++            element.child(
++                Button::new("run-asm", "הרץ")
++                    .label_size(LabelSize::Small)
++                    .start_icon(Icon::new(IconName::PlayFilled).size(IconSize::XSmall))
++                    .tooltip(Tooltip::text(
++                        "שמירה, בנייה (nasm + ld) והרצה ברקע - בלי לפתוח טרמינל",
++                    ))
++                    .on_click(cx.listener(|this, _, window, cx| this.run(window, cx))),
++            )
++        })
++    }
++}
++
++impl StatusItemView for RunAsmButton {
++    fn set_active_pane_item(
++        &mut self,
++        active_pane_item: Option<&dyn ItemHandle>,
++        window: &mut Window,
++        cx: &mut Context<Self>,
++    ) {
++        if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
++            self._observe_active_editor =
++                Some(cx.observe_in(&editor, window, |this, editor, _, cx| {
++                    this.update(editor, cx)
++                }));
++            self.update(editor, cx);
++        } else {
++            self.active_editor = None;
++            self.is_assembly = false;
++            self._observe_active_editor = None;
++        }
++        cx.notify();
++    }
++
++    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
++        None
++    }
++}
